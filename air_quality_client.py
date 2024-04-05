@@ -13,7 +13,6 @@ class AirQualityClient:
         else:
             raise Exception(f"API request failed with status code {response.status_code}")
 
-# Przykładowe użycie:
 if __name__ == "__main__":
     client = AirQualityClient("2e571cb7-1717-4e12-94a2-5efddc5dba58")
     try:
