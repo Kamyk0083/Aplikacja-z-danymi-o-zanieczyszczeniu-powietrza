@@ -19,25 +19,31 @@ class AirQualityRecordView(MethodView):
         query_timestamp = request.args.get('timestamp', type=lambda x: datetime.fromisoformat(x))
         if not query_timestamp:
             return jsonify({"error": "Timestamp query parameter is required."}), 400
-        closest_record = min(
-            data_storage, 
-            key=lambda x: abs(x.timestamp - query_timestamp), 
-            default=None
-        )
-        
+
+        try:
+            closest_record = min(
+                data_storage,
+                key=lambda x: abs(x.timestamp - query_timestamp),
+                default=None
+            )
+        except Exception as e:
+            return jsonify({"error": f"Błąd podczas wyszukiwania rekordu: {str(e)}"}), 500
+
         if closest_record:
             return jsonify(closest_record.dict())
         else:
             return jsonify({"message": "No data found near the provided timestamp."}), 404
-
+        
     def post(self):
         try:
             data = request.json
             record = WeatherAndAirQualityData(**data)
-            data_storage.append(record)
+            data_storage.append(record) 
             return jsonify(record.dict()), 201
         except pydantic.ValidationError as e:
             return jsonify({"error": str(e)}), 400
+        except Exception as e:  
+            return jsonify({"error": f"Błąd podczas zapisywania rekordu: {str(e)}"}), 500
 
 app.add_url_rule('/air_quality', view_func=AirQualityRecordView.as_view('air_quality_api'))
 
