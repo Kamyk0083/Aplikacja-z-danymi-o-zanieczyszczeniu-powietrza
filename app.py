@@ -1,11 +1,29 @@
 from flask import Flask, request, jsonify
 from flask.views import MethodView
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
+from typing import Optional, List
 import pydantic
 
 app = Flask(__name__)
-data_storage = []
+
+class DataStorage:
+    def __init__(self):
+        self.records: List[WeatherAndAirQualityData] = []
+
+    def add_record(self, record):
+        self.records.append(record)
+
+    def find_closest_record(self, timestamp):
+        try:
+            return min(
+                self.records,
+                key=lambda x: abs(x.timestamp - timestamp),
+                default=None
+            )
+        except ValueError:
+            return None
+
+storage = DataStorage()
 
 class WeatherAndAirQualityData(pydantic.BaseModel):
     timestamp: datetime
@@ -16,34 +34,22 @@ class WeatherAndAirQualityData(pydantic.BaseModel):
 
 class AirQualityRecordView(MethodView):
     def get(self):
-        query_timestamp = request.args.get('timestamp', type=lambda x: datetime.fromisoformat(x))
-        if not query_timestamp:
+        timestamp_query = request.args.get('timestamp')
+        if not timestamp_query:
             return jsonify({"error": "Timestamp query parameter is required."}), 400
 
-        try:
-            closest_record = min(
-                data_storage,
-                key=lambda x: abs(x.timestamp - query_timestamp),
-                default=None
-            )
-        except Exception as e:
-            return jsonify({"error": f"Błąd podczas wyszukiwania rekordu: {str(e)}"}), 500
-
-        if closest_record:
-            return jsonify(closest_record.dict())
-        else:
-            return jsonify({"message": "No data found near the provided timestamp."}), 404
+        query_timestamp = datetime.fromisoformat(timestamp_query)
+        closest_record = storage.find_closest_record(query_timestamp)
+        return jsonify(closest_record.dict()) if closest_record else jsonify({"message": "No data found."}), 404
         
     def post(self):
+        data = request.json
         try:
-            data = request.json
             record = WeatherAndAirQualityData(**data)
-            data_storage.append(record) 
+            storage.add_record(record)
             return jsonify(record.dict()), 201
         except pydantic.ValidationError as e:
             return jsonify({"error": str(e)}), 400
-        except Exception as e:  
-            return jsonify({"error": f"Błąd podczas zapisywania rekordu: {str(e)}"}), 500
 
 app.add_url_rule('/air_quality', view_func=AirQualityRecordView.as_view('air_quality_api'))
 
